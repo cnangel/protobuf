@@ -40,10 +40,10 @@
 #include <map>
 #include <string>
 #include <utility>
-#include <google/protobuf/descriptor.h>
 #include <google/protobuf/descriptor.pb.h>
-#include <google/protobuf/repeated_field.h>
 #include <google/protobuf/io/tokenizer.h>
+#include <google/protobuf/descriptor.h>
+#include <google/protobuf/repeated_field.h>
 
 namespace google {
 namespace protobuf { class Message; }
@@ -370,6 +370,12 @@ class LIBPROTOBUF_EXPORT Parser {
   bool ParseReservedNames(DescriptorProto* message,
                           const LocationRecorder& parent_location);
   bool ParseReservedNumbers(DescriptorProto* message,
+                            const LocationRecorder& parent_location);
+  bool ParseReserved(EnumDescriptorProto* message,
+                     const LocationRecorder& message_location);
+  bool ParseReservedNames(EnumDescriptorProto* message,
+                          const LocationRecorder& parent_location);
+  bool ParseReservedNumbers(EnumDescriptorProto* message,
                             const LocationRecorder& parent_location);
 
   // Parse an "extend" declaration.  (See also comments for

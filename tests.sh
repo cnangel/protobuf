@@ -35,7 +35,7 @@ internal_build_cpp() {
 
 build_cpp() {
   internal_build_cpp
-  make check -j2
+  make check -j2 || (cat src/test-suite.log; false)
   cd conformance && make test_cpp && cd ..
 
   # The benchmark code depends on cmake, so test if it is installed before
@@ -44,10 +44,7 @@ build_cpp() {
   # appears to be missing it: https://github.com/travis-ci/travis-ci/issues/6996
   if [[ $(type cmake 2>/dev/null) ]]; then
     # Verify benchmarking code can build successfully.
-    git submodule init
-    git submodule update
-    cd third_party/benchmark && cmake -DCMAKE_BUILD_TYPE=Release && make && cd ../..
-    cd benchmarks && make && ./generate-datasets && cd ..
+    cd benchmarks && make cpp-benchmark && cd ..
   else
     echo ""
     echo "WARNING: Skipping validation of the bench marking code, cmake isn't installed."
@@ -61,7 +58,7 @@ build_cpp_distcheck() {
   make dist
 
   # List all files that should be included in the distribution package.
-  git ls-files | grep "^\(java\|python\|objectivec\|csharp\|js\|ruby\|php\|cmake\|examples\)" |\
+  git ls-files | grep "^\(java\|python\|objectivec\|csharp\|js\|ruby\|php\|cmake\|examples\|src/google/protobuf/.*\.proto\)" |\
     grep -v ".gitignore" | grep -v "java/compatibility_tests" |\
     grep -v "python/compatibility_tests" | grep -v "csharp/compatibility_tests" > dist.lst
   # Unzip the dist tar file.
@@ -87,36 +84,25 @@ build_cpp_distcheck() {
 }
 
 build_csharp() {
-  # Just for the conformance tests. We don't currently
-  # need to really build protoc, but it's simplest to keep with the
-  # conventions of the other builds.
+  # Required for conformance tests and to regenerate protos.
   internal_build_cpp
   NUGET=/usr/local/bin/nuget.exe
-
-  if [ "$TRAVIS" == "true" ]; then
-    # Install latest version of Mono
-    sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 3FA7E0328081BFF6A14DA29AA6A19B38D3D831EF
-    sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 1397BC53640DB551
-    echo "deb http://download.mono-project.com/repo/debian wheezy main" | sudo tee /etc/apt/sources.list.d/mono-xamarin.list
-    sudo apt-get update -qq
-    sudo apt-get install -qq mono-devel referenceassemblies-pcl nunit
-
-    # Then install the dotnet SDK as per Ubuntu 14.04 instructions on dot.net.
-    sudo sh -c 'echo "deb [arch=amd64] https://apt-mo.trafficmanager.net/repos/dotnet-release/ trusty main" > /etc/apt/sources.list.d/dotnetdev.list'
-    sudo apt-key adv --keyserver apt-mo.trafficmanager.net --recv-keys 417A0893
-    sudo apt-get update -qq
-    sudo apt-get install -qq dotnet-dev-1.0.0-preview2-003121
-  fi
 
   # Perform "dotnet new" once to get the setup preprocessing out of the
   # way. That spews a lot of output (including backspaces) into logs
   # otherwise, and can cause problems. It doesn't matter if this step
   # is performed multiple times; it's cheap after the first time anyway.
+  # (It also doesn't matter if it's unnecessary, which it will be on some
+  # systems. It's necessary on Jenkins in order to avoid unprintable
+  # characters appearing in the JUnit output.)
   mkdir dotnettmp
   (cd dotnettmp; dotnet new > /dev/null)
   rm -rf dotnettmp
 
-  (cd csharp/src; dotnet restore)
+  # Check that the protos haven't broken C# codegen.
+  # TODO(jonskeet): Fail if regenerating creates any changes.
+  csharp/generate_protos.sh
+  
   csharp/buildall.sh
   cd conformance && make test_csharp && cd ..
 
@@ -141,7 +127,7 @@ build_golang() {
   export PATH="$GOPATH/bin:$PATH"
   go get github.com/golang/protobuf/protoc-gen-go
 
-  cd examples && make gotest && cd ..
+  cd examples && PROTO_PATH="-I../src -I." make gotest && cd ..
 }
 
 use_java() {
@@ -246,9 +232,10 @@ internal_install_python_deps() {
     sudo apt-get install -y python-software-properties # for apt-add-repository
     sudo apt-add-repository -y ppa:fkrull/deadsnakes
     sudo apt-get update -qq
-    sudo apt-get install -y python2.6 python2.6-dev
     sudo apt-get install -y python3.3 python3.3-dev
     sudo apt-get install -y python3.4 python3.4-dev
+    sudo apt-get install -y python3.5 python3.5-dev
+    sudo apt-get install -y python3.6 python3.6-dev
   fi
 }
 
@@ -290,7 +277,7 @@ build_python() {
   cd python
   # Only test Python 2.6/3.x on Linux
   if [ $(uname -s) == "Linux" ]; then
-    envlist=py\{26,27,33,34\}-python
+    envlist=py\{27,33,34,35,36\}-python
   else
     envlist=py27-python
   fi
@@ -304,10 +291,9 @@ build_python_cpp() {
   export LD_LIBRARY_PATH=../src/.libs # for Linux
   export DYLD_LIBRARY_PATH=../src/.libs # for OS X
   cd python
-  # Only test Python 2.6/3.x on Linux
+  # Only test Python 3.x on Linux
   if [ $(uname -s) == "Linux" ]; then
-    # py26 is currently disabled due to json_format
-    envlist=py\{27,33,34\}-cpp
+    envlist=py\{27,33,34,35,36\}-cpp
   else
     envlist=py27-cpp
   fi
@@ -359,10 +345,25 @@ generate_php_test_proto() {
   # Generate test file
   rm -rf generated
   mkdir generated
-  ../../src/protoc --php_out=generated proto/test.proto proto/test_include.proto proto/test_no_namespace.proto proto/test_prefix.proto
+  ../../src/protoc --php_out=generated         \
+    proto/test.proto                           \
+    proto/test_include.proto                   \
+    proto/test_no_namespace.proto              \
+    proto/test_prefix.proto                    \
+    proto/test_php_namespace.proto             \
+    proto/test_empty_php_namespace.proto       \
+    proto/test_reserved_enum_lower.proto       \
+    proto/test_reserved_enum_upper.proto       \
+    proto/test_reserved_enum_value_lower.proto \
+    proto/test_reserved_enum_value_upper.proto \
+    proto/test_reserved_message_lower.proto    \
+    proto/test_reserved_message_upper.proto    \
+    proto/test_service.proto                   \
+    proto/test_service_namespace.proto         \
+    proto/test_descriptors.proto
   pushd ../../src
-  ./protoc --php_out=../php/tests/generated google/protobuf/empty.proto
-  ./protoc --php_out=../php/tests/generated -I../php/tests -I. ../php/tests/proto/test_import_descriptor_proto.proto
+  ./protoc --php_out=../php/tests/generated -I../php/tests -I. \
+    ../php/tests/proto/test_import_descriptor_proto.proto
   popd
   popd
 }
@@ -410,27 +411,30 @@ build_php5.5() {
   phpunit
   popd
   pushd conformance
-  # TODO(teboring): Add it back
-  # make test_php
+  make test_php
   popd
 }
 
 build_php5.5_c() {
   use_php 5.5
   wget https://phar.phpunit.de/phpunit-4.8.0.phar -O /usr/bin/phpunit
-  cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
-  # make test_php_c
+  pushd php/tests
+  /bin/bash ./test.sh 5.5
   popd
+  # TODO(teboring): Add it back
+  # pushd conformance
+  # make test_php_c
+  # popd
 }
 
 build_php5.5_zts_c() {
   use_php_zts 5.5
   wget https://phar.phpunit.de/phpunit-4.8.0.phar -O /usr/bin/phpunit
-  cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
-  # make test_php_c
-  popd
+  cd php/tests && /bin/bash ./test.sh 5.5-zts && cd ../..
+  # TODO(teboring): Add it back
+  # pushd conformance
+  # make test_php_zts_c
+  # popd
 }
 
 build_php5.6() {
@@ -442,27 +446,28 @@ build_php5.6() {
   phpunit
   popd
   pushd conformance
-  # TODO(teboring): Add it back
-  # make test_php
+  make test_php
   popd
 }
 
 build_php5.6_c() {
   use_php 5.6
   wget https://phar.phpunit.de/phpunit-5.7.0.phar -O /usr/bin/phpunit
-  cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
+  cd php/tests && /bin/bash ./test.sh 5.6 && cd ../..
+  # TODO(teboring): Add it back
+  # pushd conformance
   # make test_php_c
-  popd
+  # popd
 }
 
 build_php5.6_zts_c() {
   use_php_zts 5.6
   wget https://phar.phpunit.de/phpunit-5.7.0.phar -O /usr/bin/phpunit
-  cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
-  # make test_php_c
-  popd
+  cd php/tests && /bin/bash ./test.sh 5.6-zts && cd ../..
+  # TODO(teboring): Add it back
+  # pushd conformance
+  # make test_php_zts_c
+  # popd
 }
 
 build_php5.6_mac() {
@@ -484,9 +489,10 @@ build_php5.6_mac() {
 
   # Test
   cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
+  # TODO(teboring): Add it back
+  # pushd conformance
   # make test_php_c
-  popd
+  # popd
 }
 
 build_php7.0() {
@@ -498,27 +504,28 @@ build_php7.0() {
   phpunit
   popd
   pushd conformance
-  # TODO(teboring): Add it back
-  # make test_php
+  make test_php
   popd
 }
 
 build_php7.0_c() {
   use_php 7.0
   wget https://phar.phpunit.de/phpunit-5.6.0.phar -O /usr/bin/phpunit
-  cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
+  cd php/tests && /bin/bash ./test.sh 7.0 && cd ../..
+  # TODO(teboring): Add it back
+  # pushd conformance
   # make test_php_c
-  popd
+  # popd
 }
 
 build_php7.0_zts_c() {
   use_php_zts 7.0
   wget https://phar.phpunit.de/phpunit-5.6.0.phar -O /usr/bin/phpunit
-  cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
-  # make test_php_c
-  popd
+  cd php/tests && /bin/bash ./test.sh 7.0-zts && cd ../..
+  # TODO(teboring): Add it back.
+  # pushd conformance
+  # make test_php_zts_c
+  # popd
 }
 
 build_php7.0_mac() {
@@ -540,9 +547,10 @@ build_php7.0_mac() {
 
   # Test
   cd php/tests && /bin/bash ./test.sh && cd ../..
-  pushd conformance
+  # TODO(teboring): Add it back
+  # pushd conformance
   # make test_php_c
-  popd
+  # popd
 }
 
 build_php_compatibility() {
@@ -550,16 +558,51 @@ build_php_compatibility() {
   php/tests/compatibility_test.sh
 }
 
+build_php7.1() {
+  use_php 7.1
+  pushd php
+  rm -rf vendor
+  cp -r /usr/local/vendor-7.1 vendor
+  wget https://phar.phpunit.de/phpunit-5.6.0.phar -O /usr/bin/phpunit
+  phpunit
+  popd
+  pushd conformance
+  # TODO(teboring): Add it back
+  # make test_php
+  popd
+}
+
+build_php7.1_c() {
+  use_php 7.1
+  wget https://phar.phpunit.de/phpunit-5.6.0.phar -O /usr/bin/phpunit
+  cd php/tests && /bin/bash ./test.sh 7.1 && cd ../..
+  pushd conformance
+  # make test_php_c
+  popd
+}
+
+build_php7.1_zts_c() {
+  use_php_zts 7.1
+  wget https://phar.phpunit.de/phpunit-5.6.0.phar -O /usr/bin/phpunit
+  cd php/tests && /bin/bash ./test.sh 7.1-zts && cd ../..
+  pushd conformance
+  # make test_php_c
+  popd
+}
+
 build_php_all_32() {
   build_php5.5
   build_php5.6
   build_php7.0
+  build_php7.1
   build_php5.5_c
   build_php5.6_c
   build_php7.0_c
+  build_php7.1_c
   build_php5.5_zts_c
   build_php5.6_zts_c
   build_php7.0_zts_c
+  build_php7.1_zts_c
 }
 
 build_php_all() {
@@ -606,6 +649,8 @@ Usage: $0 { cpp |
             php7.0   |
             php7.0_c |
             php_compatibility |
+            php7.1   |
+            php7.1_c |
             php_all)
 "
   exit 1

@@ -46,15 +46,13 @@
 #include <google/protobuf/compiler/csharp/csharp_helpers.h>
 #include <google/protobuf/compiler/csharp/csharp_names.h>
 
-using google::protobuf::internal::scoped_ptr;
-
 namespace google {
 namespace protobuf {
 namespace compiler {
 namespace csharp {
 
 void FieldGeneratorBase::SetCommonFieldVariables(
-    map<string, string>* variables) {
+    std::map<string, string>* variables) {
   // Note: this will be valid even though the tag emitted for packed and unpacked versions of
   // repeated fields varies by wire format. The wire format is encoded in the bottom 3 bits, which
   // never effects the tag size.
@@ -92,7 +90,7 @@ void FieldGeneratorBase::SetCommonFieldVariables(
 }
 
 void FieldGeneratorBase::SetCommonOneofFieldVariables(
-    map<string, string>* variables) {
+    std::map<string, string>* variables) {
   (*variables)["oneof_name"] = oneof_name();
   (*variables)["has_property_check"] =
     oneof_name() + "Case_ == " + oneof_property_name() +
