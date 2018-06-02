@@ -1,4 +1,4 @@
-# Bazel (http://bazel.io/) BUILD file for Protobuf.
+# Bazel (https://bazel.build/) BUILD file for Protobuf.
 
 licenses(["notice"])
 
@@ -54,7 +54,19 @@ config_setting(
 # Android and MSVC builds do not need to link in a separate pthread library.
 LINK_OPTS = select({
     ":android": [],
-    ":msvc": [],
+    ":msvc": [
+        # Linking to setargv.obj makes the default command line argument
+        # parser expand wildcards, so the main method's argv will contain the
+        # expanded list instead of the wildcards.
+        # Using -WHOLEARCHIVE, because:
+        # - Microsoft ships this object file next to default libraries
+        # - but this file is not a library, just a precompiled object
+        # - just listing the name here without "-WHOLEARCHIVE:" would make Bazel
+        #   believe that "setargv.obj" is a source or rule output in this
+        #   package, which it is not.
+        # See https://msdn.microsoft.com/en-us/library/8bch7bkk.aspx
+        "-WHOLEARCHIVE:setargv.obj",
+    ],
     "//conditions:default": ["-lpthread", "-lm"],
 })
 
@@ -257,24 +269,6 @@ internal_copied_filegroup(
 # Protocol Buffers Compiler
 ################################################################################
 
-cc_binary(
-    name = "js_embed",
-    srcs = ["src/google/protobuf/compiler/js/embed.cc"],
-    visibility = ["//visibility:public"],
-)
-
-genrule(
-    name = "generate_js_well_known_types_embed",
-    srcs = [
-        "src/google/protobuf/compiler/js/well_known_types/any.js",
-        "src/google/protobuf/compiler/js/well_known_types/struct.js",
-        "src/google/protobuf/compiler/js/well_known_types/timestamp.js",
-    ],
-    outs = ["src/google/protobuf/compiler/js/well_known_types_embed.cc"],
-    cmd = "$(location :js_embed) $(SRCS) > $@",
-    tools = [":js_embed"],
-)
-
 cc_library(
     name = "protoc_lib",
     srcs = [
@@ -341,17 +335,6 @@ cc_library(
         "src/google/protobuf/compiler/java/java_shared_code_generator.cc",
         "src/google/protobuf/compiler/java/java_string_field.cc",
         "src/google/protobuf/compiler/java/java_string_field_lite.cc",
-        "src/google/protobuf/compiler/javanano/javanano_enum.cc",
-        "src/google/protobuf/compiler/javanano/javanano_enum_field.cc",
-        "src/google/protobuf/compiler/javanano/javanano_extension.cc",
-        "src/google/protobuf/compiler/javanano/javanano_field.cc",
-        "src/google/protobuf/compiler/javanano/javanano_file.cc",
-        "src/google/protobuf/compiler/javanano/javanano_generator.cc",
-        "src/google/protobuf/compiler/javanano/javanano_helpers.cc",
-        "src/google/protobuf/compiler/javanano/javanano_map_field.cc",
-        "src/google/protobuf/compiler/javanano/javanano_message.cc",
-        "src/google/protobuf/compiler/javanano/javanano_message_field.cc",
-        "src/google/protobuf/compiler/javanano/javanano_primitive_field.cc",
         "src/google/protobuf/compiler/js/js_generator.cc",
         "src/google/protobuf/compiler/js/well_known_types_embed.cc",
         "src/google/protobuf/compiler/objectivec/objectivec_enum.cc",
@@ -639,6 +622,7 @@ py_library(
     name = "python_srcs",
     srcs = glob(
         [
+            "python/google/__init__.py",
             "python/google/protobuf/*.py",
             "python/google/protobuf/**/*.py",
         ],

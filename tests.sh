@@ -27,6 +27,9 @@ internal_build_cpp() {
     export CXX="g++-4.8" CC="gcc-4.8"
   fi
 
+  # Initialize any submodules.
+  git submodule update --init --recursive
+
   ./autogen.sh
   ./configure CXXFLAGS="-fPIC"  # -fPIC is needed for python cpp test.
                                 # See python/setup.py for more details
@@ -53,6 +56,8 @@ build_cpp() {
 }
 
 build_cpp_distcheck() {
+  # Initialize any submodules.
+  git submodule update --init --recursive
   ./autogen.sh
   ./configure
   make dist
@@ -102,7 +107,7 @@ build_csharp() {
   # Check that the protos haven't broken C# codegen.
   # TODO(jonskeet): Fail if regenerating creates any changes.
   csharp/generate_protos.sh
-  
+
   csharp/buildall.sh
   cd conformance && make test_csharp && cd ..
 
@@ -223,7 +228,8 @@ internal_install_python_deps() {
   fi
   # Install tox (OS X doesn't have pip).
   if [ $(uname -s) == "Darwin" ]; then
-    sudo easy_install tox
+    brew upgrade python
+    python3 -m pip install tox
   else
     sudo pip install tox
   fi
@@ -346,6 +352,7 @@ generate_php_test_proto() {
   rm -rf generated
   mkdir generated
   ../../src/protoc --php_out=generated         \
+    proto/empty/echo.proto                     \
     proto/test.proto                           \
     proto/test_include.proto                   \
     proto/test_no_namespace.proto              \

@@ -56,9 +56,7 @@ clean-local:
 
 CLEANFILES = $(protoc_outputs) unittest_proto_middleman \
              testzip.jar testzip.list testzip.proto testzip.zip \
-             no_warning_test.cc \
-             google/protobuf/compiler/js/well_known_types_embed.cc \
-             js_embed$(EXEEXT)
+             no_warning_test.cc
 
 MAINTAINERCLEANFILES =   \
   Makefile.in
@@ -147,7 +145,6 @@ nobase_include_HEADERS =                                         \
   google/protobuf/compiler/csharp/csharp_names.h                 \
   google/protobuf/compiler/java/java_generator.h                 \
   google/protobuf/compiler/java/java_names.h                     \
-  google/protobuf/compiler/javanano/javanano_generator.h         \
   google/protobuf/compiler/js/js_generator.h                     \
   google/protobuf/compiler/js/well_known_types_embed.h           \
   google/protobuf/compiler/objectivec/objectivec_generator.h     \
@@ -409,29 +406,6 @@ libprotoc_la_SOURCES =                                         \
   google/protobuf/compiler/java/java_doc_comment.h             \
   google/protobuf/compiler/js/js_generator.cc                  \
   google/protobuf/compiler/js/well_known_types_embed.cc        \
-  google/protobuf/compiler/javanano/javanano_enum.cc           \
-  google/protobuf/compiler/javanano/javanano_enum.h            \
-  google/protobuf/compiler/javanano/javanano_enum_field.cc     \
-  google/protobuf/compiler/javanano/javanano_enum_field.h      \
-  google/protobuf/compiler/javanano/javanano_extension.cc      \
-  google/protobuf/compiler/javanano/javanano_extension.h       \
-  google/protobuf/compiler/javanano/javanano_field.cc          \
-  google/protobuf/compiler/javanano/javanano_field.h           \
-  google/protobuf/compiler/javanano/javanano_file.cc           \
-  google/protobuf/compiler/javanano/javanano_file.h            \
-  google/protobuf/compiler/javanano/javanano_generator.cc      \
-  google/protobuf/compiler/javanano/javanano_generator.h       \
-  google/protobuf/compiler/javanano/javanano_helpers.cc        \
-  google/protobuf/compiler/javanano/javanano_helpers.h         \
-  google/protobuf/compiler/javanano/javanano_map_field.cc      \
-  google/protobuf/compiler/javanano/javanano_map_field.h       \
-  google/protobuf/compiler/javanano/javanano_message.cc        \
-  google/protobuf/compiler/javanano/javanano_message.h         \
-  google/protobuf/compiler/javanano/javanano_message_field.cc  \
-  google/protobuf/compiler/javanano/javanano_message_field.h   \
-  google/protobuf/compiler/javanano/javanano_params.h          \
-  google/protobuf/compiler/javanano/javanano_primitive_field.cc \
-  google/protobuf/compiler/javanano/javanano_primitive_field.h \
   google/protobuf/compiler/objectivec/objectivec_enum.cc       \
   google/protobuf/compiler/objectivec/objectivec_enum.h        \
   google/protobuf/compiler/objectivec/objectivec_enum_field.cc \
@@ -494,22 +468,6 @@ libprotoc_la_SOURCES =                                         \
 bin_PROGRAMS = protoc
 protoc_LDADD = $(PTHREAD_LIBS) libprotobuf.la libprotoc.la
 protoc_SOURCES = google/protobuf/compiler/main.cc
-
-# The special JS code for the well-known types is linked into the compiler via
-# well_known_types_embed.cc, which is generated from .js source files. We have
-# to build the js_embed binary using $(CXX_FOR_BUILD) so that it is executable
-# on the build machine in a cross-compilation setup.
-js_embed$(EXEEXT): $(srcdir)/google/protobuf/compiler/js/embed.cc
-	$(CXX_FOR_BUILD) -o $@ $<
-js_well_known_types_sources =                                  \
-	google/protobuf/compiler/js/well_known_types/any.js          \
-	google/protobuf/compiler/js/well_known_types/struct.js       \
-	google/protobuf/compiler/js/well_known_types/timestamp.js
-# We have to cd to $(srcdir) so that out-of-tree builds work properly.
-google/protobuf/compiler/js/well_known_types_embed.cc: js_embed$(EXEEXT) $(js_well_known_types_sources)
-	mkdir -p `dirname $@` && \
-	oldpwd=`pwd` && cd $(srcdir) && \
-	$$oldpwd/js_embed$(EXEEXT) $(js_well_known_types_sources) > $$oldpwd/$@
 
 # Tests ==============================================================
 
@@ -589,7 +547,6 @@ EXTRA_DIST =                                                   \
   google/protobuf/package_info.h                               \
   google/protobuf/io/package_info.h                            \
   google/protobuf/util/package_info.h                          \
-  google/protobuf/compiler/js/embed.cc                         \
   google/protobuf/compiler/ruby/ruby_generated_code.proto      \
   google/protobuf/compiler/ruby/ruby_generated_code_pb.rb      \
   google/protobuf/compiler/package_info.h                      \
@@ -735,15 +692,19 @@ COMMON_TEST_SOURCES =                                          \
   google/protobuf/testing/file.cc                              \
   google/protobuf/testing/file.h
 
+GOOGLETEST_BUILD_DIR=../third_party/googletest/googletest
+GOOGLEMOCK_BUILD_DIR=../third_party/googletest/googlemock
+GOOGLETEST_SRC_DIR=$(srcdir)/../third_party/googletest/googletest
+GOOGLEMOCK_SRC_DIR=$(srcdir)/../third_party/googletest/googlemock
 check_PROGRAMS = protoc protobuf-test protobuf-lazy-descriptor-test \
                  protobuf-lite-test test_plugin protobuf-lite-arena-test \
                  no-warning-test $(GZCHECKPROGRAMS)
 protobuf_test_LDADD = $(PTHREAD_LIBS) libprotobuf.la libprotoc.la \
-                      ../gmock/gtest/lib/libgtest.la              \
-                      ../gmock/lib/libgmock.la                    \
-                      ../gmock/lib/libgmock_main.la
-protobuf_test_CPPFLAGS = -I$(srcdir)/../gmock/gtest/include \
-                         -I$(srcdir)/../gmock/include
+                      $(GOOGLETEST_BUILD_DIR)/lib/libgtest.la     \
+                      $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock.la     \
+                      $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock_main.la
+protobuf_test_CPPFLAGS = -I$(GOOGLETEST_SRC_DIR)/include \
+                         -I$(GOOGLEMOCK_SRC_DIR)/include
 # Disable optimization for tests unless the user explicitly asked for it,
 # since test_util.cc takes forever to compile with optimization (with GCC).
 # See configure.ac for more info.
@@ -831,11 +792,11 @@ $(am_protobuf_test_OBJECTS): unittest_proto_middleman
 # Run cpp_unittest again with PROTOBUF_TEST_NO_DESCRIPTORS defined.
 protobuf_lazy_descriptor_test_LDADD = $(PTHREAD_LIBS) libprotobuf.la \
                       libprotoc.la                                   \
-                      ../gmock/gtest/lib/libgtest.la                 \
-                      ../gmock/lib/libgmock.la                       \
-                      ../gmock/lib/libgmock_main.la
-protobuf_lazy_descriptor_test_CPPFLAGS = -I$(srcdir)/../gmock/include       \
-                                         -I$(srcdir)/../gmock/gtest/include \
+                      $(GOOGLETEST_BUILD_DIR)/lib/libgtest.la        \
+                      $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock.la        \
+                      $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock_main.la
+protobuf_lazy_descriptor_test_CPPFLAGS = -I$(GOOGLEMOCK_SRC_DIR)/include \
+                                         -I$(GOOGLETEST_SRC_DIR)/include \
                                          -DPROTOBUF_TEST_NO_DESCRIPTORS
 protobuf_lazy_descriptor_test_CXXFLAGS = $(NO_OPT_CXXFLAGS)
 protobuf_lazy_descriptor_test_SOURCES =                        \
@@ -856,12 +817,12 @@ COMMON_LITE_TEST_SOURCES =                                             \
 # depend on gtest because our internal version of gtest depend on proto
 # full runtime and we want to make sure this test builds without full
 # runtime.
-protobuf_lite_test_LDADD = $(PTHREAD_LIBS) libprotobuf-lite.la \
-                           ../gmock/gtest/lib/libgtest.la      \
-                           ../gmock/lib/libgmock.la            \
-                           ../gmock/lib/libgmock_main.la
-protobuf_lite_test_CPPFLAGS= -I$(srcdir)/../gmock/include \
-                             -I$(srcdir)/../gmock/gtest/include
+protobuf_lite_test_LDADD = $(PTHREAD_LIBS) libprotobuf-lite.la     \
+                           $(GOOGLETEST_BUILD_DIR)/lib/libgtest.la \
+                           $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock.la \
+                           $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock_main.la
+protobuf_lite_test_CPPFLAGS= -I$(GOOGLEMOCK_SRC_DIR)/include \
+                             -I$(GOOGLETEST_SRC_DIR)/include
 protobuf_lite_test_CXXFLAGS = $(NO_OPT_CXXFLAGS)
 protobuf_lite_test_SOURCES =                                           \
   google/protobuf/lite_unittest.cc                                     \
@@ -873,11 +834,11 @@ $(am_protobuf_lite_test_OBJECTS): unittest_proto_middleman
 # gtest when building the test internally our memory sanitizer doesn't detect
 # memory leaks (don't know why).
 protobuf_lite_arena_test_LDADD = $(PTHREAD_LIBS) libprotobuf-lite.la \
-                      ../gmock/gtest/lib/libgtest.la                 \
-                      ../gmock/lib/libgmock.la                       \
-                      ../gmock/lib/libgmock_main.la
-protobuf_lite_arena_test_CPPFLAGS = -I$(srcdir)/../gmock/include       \
-                                    -I$(srcdir)/../gmock/gtest/include
+                      $(GOOGLETEST_BUILD_DIR)/lib/libgtest.la        \
+                      $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock.la        \
+                      $(GOOGLEMOCK_BUILD_DIR)/lib/libgmock_main.la
+protobuf_lite_arena_test_CPPFLAGS = -I$(GOOGLEMOCK_SRC_DIR)/include  \
+                                    -I$(GOOGLETEST_SRC_DIR)/include
 protobuf_lite_arena_test_CXXFLAGS = $(NO_OPT_CXXFLAGS)
 protobuf_lite_arena_test_SOURCES =       \
   google/protobuf/lite_arena_unittest.cc \
@@ -887,8 +848,8 @@ $(am_protobuf_lite_arena_test_OBJECTS): unittest_proto_middleman
 
 # Test plugin binary.
 test_plugin_LDADD = $(PTHREAD_LIBS) libprotobuf.la libprotoc.la \
-                    ../gmock/gtest/lib/libgtest.la
-test_plugin_CPPFLAGS = -I$(srcdir)/../gmock/gtest/include
+                    $(GOOGLETEST_BUILD_DIR)/lib/libgtest.la
+test_plugin_CPPFLAGS = -I$(GOOGLETEST_SRC_DIR)/include
 test_plugin_SOURCES =                                          \
   google/protobuf/compiler/mock_code_generator.cc              \
   google/protobuf/testing/file.cc                              \
