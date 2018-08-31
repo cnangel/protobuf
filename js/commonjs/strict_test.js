@@ -1,5 +1,5 @@
 // Protocol Buffers - Google's data interchange format
-// Copyright 2008 Google Inc.  All rights reserved.
+// Copyright 2016 Google Inc.  All rights reserved.
 // https://developers.google.com/protocol-buffers/
 //
 // Redistribution and use in source and binary forms, with or without
@@ -28,53 +28,40 @@
 // (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 // OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-/* This code will be inserted into generated code for
- * google/protobuf/any.proto. */
-
-/**
- * Returns the type name contained in this instance, if any.
- * @return {string|undefined}
- */
-proto.google.protobuf.Any.prototype.getTypeName = function() {
-  return this.getTypeUrl().split('/').pop();
-};
+// Test suite is written using Jasmine -- see http://jasmine.github.io/
 
 
-/**
- * Packs the given message instance into this Any.
- * @param {!Uint8Array} serialized The serialized data to pack.
- * @param {string} name The type name of this message object.
- * @param {string=} opt_typeUrlPrefix the type URL prefix.
- */
-proto.google.protobuf.Any.prototype.pack = function(serialized, name,
-                                                    opt_typeUrlPrefix) {
-  if (!opt_typeUrlPrefix) {
-    opt_typeUrlPrefix = 'type.googleapis.com/';
-  }
 
-  if (opt_typeUrlPrefix.substr(-1) != '/') {
-    this.setTypeUrl(opt_typeUrlPrefix + '/' + name);
-  } else {
-    this.setTypeUrl(opt_typeUrlPrefix + name);
-  }
+var googleProtobuf = require('google-protobuf');
+var asserts = require('closure_asserts_commonjs');
+var global = Function('return this')();
 
-  this.setValue(serialized);
-};
+// Bring asserts into the global namespace.
+googleProtobuf.object.extend(global, asserts);
 
+var test9_pb = require('./test9_pb');
+var test10_pb = require('./test10_pb');
 
-/**
- * @template T
- * Unpacks this Any into the given message object.
- * @param {function(Uint8Array):T} deserialize Function that will deserialize
- *     the binary data properly.
- * @param {string} name The expected type name of this message object.
- * @return {?T} If the name matched the expected name, returns the deserialized
- *     object, otherwise returns null.
- */
-proto.google.protobuf.Any.prototype.unpack = function(deserialize, name) {
-  if (this.getTypeName() == name) {
-    return deserialize(this.getValue_asU8());
-  } else {
-    return null;
-  }
-};
+describe('Strict test suite', function() {
+  it('testImportedMessage', function() {
+    var simple1 = new test9_pb.jspb.exttest.strict.nine.Simple9()
+    var simple2 = new test9_pb.jspb.exttest.strict.nine.Simple9()
+    assertObjectEquals(simple1.toObject(), simple2.toObject());
+  });
+
+  it('testGlobalScopePollution', function() {
+    assertObjectEquals(global.jspb.exttest, undefined);
+  });
+
+  describe('with imports', function() {
+    it('testImportedMessage', function() {
+      var simple1 = new test10_pb.jspb.exttest.strict.ten.Simple10()
+      var simple2 = new test10_pb.jspb.exttest.strict.ten.Simple10()
+      assertObjectEquals(simple1.toObject(), simple2.toObject());
+    });
+
+    it('testGlobalScopePollution', function() {
+      assertObjectEquals(global.jspb.exttest, undefined);
+    });
+  });
+});
