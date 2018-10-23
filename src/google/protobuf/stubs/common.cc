@@ -31,11 +31,7 @@
 // Author: kenton@google.com (Kenton Varda)
 
 #include <google/protobuf/stubs/common.h>
-#include <google/protobuf/stubs/once.h>
-#include <google/protobuf/stubs/status.h>
-#include <google/protobuf/stubs/stringpiece.h>
-#include <google/protobuf/stubs/strutil.h>
-#include <google/protobuf/stubs/int128.h>
+
 #include <errno.h>
 #include <sstream>
 #include <stdio.h>
@@ -53,6 +49,17 @@
 #if defined(__ANDROID__)
 #include <android/log.h>
 #endif
+
+#include <google/protobuf/stubs/callback.h>
+#include <google/protobuf/stubs/logging.h>
+#include <google/protobuf/stubs/mutex.h>
+#include <google/protobuf/stubs/once.h>
+#include <google/protobuf/stubs/status.h>
+#include <google/protobuf/stubs/stringpiece.h>
+#include <google/protobuf/stubs/strutil.h>
+#include <google/protobuf/stubs/int128.h>
+
+#include <google/protobuf/port_def.inc>
 
 namespace google {
 namespace protobuf {
@@ -242,8 +249,8 @@ DECLARE_STREAM_OPERATOR(long         , "%ld")
 DECLARE_STREAM_OPERATOR(unsigned long, "%lu")
 DECLARE_STREAM_OPERATOR(double       , "%g" )
 DECLARE_STREAM_OPERATOR(void*        , "%p" )
-DECLARE_STREAM_OPERATOR(long long         , "%" GOOGLE_LL_FORMAT "d")
-DECLARE_STREAM_OPERATOR(unsigned long long, "%" GOOGLE_LL_FORMAT "u")
+DECLARE_STREAM_OPERATOR(long long         , "%" PROTOBUF_LL_FORMAT "d")
+DECLARE_STREAM_OPERATOR(unsigned long long, "%" PROTOBUF_LL_FORMAT "u")
 #undef DECLARE_STREAM_OPERATOR
 
 LogMessage::LogMessage(LogLevel level, const char* filename, int line)

@@ -975,7 +975,7 @@ class Message
      *
      * @param array $array An array containing message properties and values.
      * @return null.
-     * @throws Exception Invalid data.
+     * @throws \Exception Invalid data.
      */
     protected function mergeFromArray(array $array)
     {
@@ -987,7 +987,44 @@ class Message
                     'Invalid message property: ' . $key);
             }
             $setter = $field->getSetter();
+            if ($field->isWrapperType()) {
+                self::normalizeToMessageType($value, $field->getMessageType()->getClass());
+            }
             $this->$setter($value);
+        }
+    }
+
+    /**
+     * Tries to normalize $value into a provided protobuf wrapper type $class.
+     * If $value is any type other than an object, we attempt to construct an
+     * instance of $class and assign $value to it using the setValue method
+     * shared by all wrapper types.
+     *
+     * @param mixed $value The value to normalize.
+     * @param string $class The expected wrapper class name
+     * @throws \Exception If $value cannot be converted to a wrapper type
+     */
+    private static function normalizeToMessageType(&$value, $class)
+    {
+        if (is_null($value) || is_object($value)) {
+            // This handles the case that $value is an instance of $class. We
+            // choose not to do any more strict checking here, relying on the
+            // existing type checking done by GPBUtil.
+            return;
+        } else {
+            // Try to instantiate $class and set the value
+            try {
+                $msg = new $class;
+                $msg->setValue($value);
+                $value = $msg;
+                return;
+            } catch (\Exception $exception) {
+                throw new \Exception(
+                    "Error normalizing value to type '$class': " . $exception->getMessage(),
+                    $exception->getCode(),
+                    $exception
+                );
+            }
         }
     }
 
@@ -1157,9 +1194,17 @@ class Message
     public function parseFromJsonStream($input)
     {
         $array = json_decode($input->getData(), true, 512, JSON_BIGINT_AS_STRING);
+        if ($this instanceof \Google\Protobuf\ListValue) {
+            $array = ["values"=>$array];
+        }
         if (is_null($array)) {
-            throw new GPBDecodeException(
-                "Cannot decode json string.");
+            if ($this instanceof \Google\Protobuf\Value) {
+              $this->setNullValue(\Google\Protobuf\NullValue::NULL_VALUE);
+              return;
+            } else {
+              throw new GPBDecodeException(
+                  "Cannot decode json string: " . $input->getData());
+            }
         }
         try {
             $this->mergeFromJsonArray($array);
